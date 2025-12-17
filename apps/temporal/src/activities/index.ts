@@ -1,7 +1,11 @@
+import 'dotenv/config';
+import pino from 'pino';
 import { convertPromptToOpenAI } from '@langchain/openai';
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import * as hub from 'langchain/hub';
+
+const logger = pino({ name: 'temporal-activities' });
 
 export interface PullPromptInput {
   promptName: string;
@@ -28,6 +32,20 @@ export interface OpenAICompletionOutput {
 export async function pullAndFormatPrompt(
   input: PullPromptInput
 ): Promise<PullPromptOutput> {
+  if (!process.env.LANGSMITH_API_KEY) {
+    logger.error({
+      msg: 'LANGSMITH_API_KEY is not set; cannot pull prompt',
+      promptName: input.promptName,
+    });
+    throw new Error('LANGSMITH_API_KEY is not configured for activities');
+  }
+
+  logger.info({
+    msg: 'Pulling LangSmith prompt',
+    promptName: input.promptName,
+    questionPreview: input.question.slice(0, 200),
+  });
+
   const prompt = await hub.pull(input.promptName, {
     apiKey: process.env.LANGSMITH_API_KEY,
   });

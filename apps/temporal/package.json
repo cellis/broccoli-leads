@@ -11,15 +11,17 @@
     "format": "biome format --write src"
   },
   "dependencies": {
+    "@broccoli/contracts": "workspace:*",
+    "@langchain/openai": "^0.4.0",
+    "@temporalio/activity": "^1.10.2",
     "@temporalio/client": "^1.10.2",
     "@temporalio/worker": "^1.10.2",
     "@temporalio/workflow": "^1.10.2",
-    "@temporalio/activity": "^1.10.2",
-    "@broccoli/contracts": "workspace:*",
+    "@types/pino": "^7.0.5",
     "dotenv": "^16.3.1",
     "langchain": "^1.2.1",
-    "@langchain/openai": "^0.4.0",
     "openai": "^4.27.0",
+    "pino": "^9.14.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -30,4 +32,3 @@
     "typescript": "^5.3.3"
   }
 }
-
