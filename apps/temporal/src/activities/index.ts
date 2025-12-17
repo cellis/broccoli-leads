@@ -1,11 +1,56 @@
 import 'dotenv/config';
 import pino from 'pino';
+import { Pool, type PoolConfig } from 'pg';
 import { convertPromptToOpenAI } from '@langchain/openai';
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import * as hub from 'langchain/hub';
 
 const logger = pino({ name: 'temporal-activities' });
+
+// Database connection pool (lazy initialized)
+let pool: Pool | null = null;
+
+function getPool(): Pool {
+  if (!pool) {
+    const config: PoolConfig = {};
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      // ensure that all of these are truthy:
+      config.database = process.env.DB_NAME;
+      config.host = process.env.DB_HOST;
+      config.port = Number.parseInt(process.env.DB_PORT ?? '5432');
+      config.user = process.env.PG_MIGRATION_USER;
+      // except password in development
+      if (process.env.NODE_ENV !== 'development') {
+        config.password = process.env.PG_MIGRATION_PASSWORD;
+      }
+
+      if (
+        !config.database ||
+        !config.host ||
+        !config.port ||
+        !config.user ||
+        (!config.password && process.env.NODE_ENV === 'production')
+      ) {
+        throw new Error(
+          [
+            'Either DATABASE_URL or all of the following',
+            'environment variables are not configured:',
+            'DB_NAME, DB_HOST, DB_PORT',
+            'PG_MIGRATION_USER',
+            'PG_MIGRATION_PASSWORD (only in production)',
+          ].join('\n')
+        );
+      }
+
+      pool = new Pool(config);
+    } else {
+      pool = new Pool({ connectionString });
+    }
+  }
+  return pool;
+}
 
 export interface PullPromptInput {
   promptName: string;
@@ -135,4 +180,92 @@ function extractChoiceContent(choice?: ChoiceShape): string {
   }
 
   return '';
+}
+
+// ============ LEAD PERSISTENCE ============
+
+export type LeadStatus =
+  | 'new'
+  | 'contacted'
+  | 'qualified'
+  | 'converted'
+  | 'lost'
+  | 'archived';
+
+export type ChatChannel =
+  | 'sms'
+  | 'email'
+  | 'whatsapp'
+  | 'phone'
+  | 'web'
+  | 'other';
+
+export interface SaveLeadInput {
+  customerName?: string;
+  customerNumber?: string;
+  customerAddress?: string;
+  provider: string;
+  providerLeadId?: string;
+  orgId: string;
+  status?: LeadStatus;
+  leadRawData?: Record<string, unknown>;
+  chatChannel?: ChatChannel;
+}
+
+export interface SaveLeadOutput {
+  leadId: string;
+  created: boolean;
+}
+
+/**
+ * Activity: Save a lead to the database
+ */
+export async function saveLead(input: SaveLeadInput): Promise<SaveLeadOutput> {
+  const db = getPool();
+
+  logger.info({
+    msg: 'Saving lead to database',
+    provider: input.provider,
+    providerLeadId: input.providerLeadId,
+    orgId: input.orgId,
+  });
+
+  const result = await db.query<{ id: string }>(
+    `INSERT INTO broccoli.leads (
+      customer_name,
+      customer_number,
+      customer_address,
+      provider,
+      provider_lead_id,
+      org_id,
+      status,
+      lead_raw_data,
+      chat_channel
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING id`,
+    [
+      input.customerName ?? null,
+      input.customerNumber ?? null,
+      input.customerAddress ?? null,
+      input.provider,
+      input.providerLeadId ?? null,
+      input.orgId,
+      input.status ?? 'new',
+      input.leadRawData ? JSON.stringify(input.leadRawData) : null,
+      input.chatChannel ?? 'email',
+    ]
+  );
+
+  const leadId = result.rows[0].id;
+
+  logger.info({
+    msg: 'Lead saved successfully',
+    leadId,
+    provider: input.provider,
+  });
+
+  return {
+    leadId,
+    created: true,
+  };
 }

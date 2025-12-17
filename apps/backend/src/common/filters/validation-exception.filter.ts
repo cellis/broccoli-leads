@@ -1,8 +1,8 @@
 import {
-  ArgumentsHost,
+  type ArgumentsHost,
   BadRequestException,
   Catch,
-  ExceptionFilter,
+  type ExceptionFilter,
   Logger,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
@@ -31,4 +31,3 @@ export class ValidationExceptionFilter implements ExceptionFilter {
     response.status(status).json(exceptionResponse);
   }
 }
-
