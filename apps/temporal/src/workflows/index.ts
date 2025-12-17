@@ -25,6 +25,26 @@ const DEFAULT_LEAD: LeadProcessingResult['lead'] = {
   serviceRequested: undefined,
 };
 
+// Values that indicate a field is missing/not available from AI parsing
+const MISSING_VALUE_PATTERNS = [
+  'n/a',
+  'na',
+  'none',
+  'null',
+  'undefined',
+  '-',
+  '',
+];
+
+/**
+ * Check if a parsed value is actually missing (empty, null, or placeholder like "N/A")
+ */
+function isMissingValue(value: string | undefined | null): boolean {
+  if (!value) return true;
+  const normalized = value.trim().toLowerCase();
+  return MISSING_VALUE_PATTERNS.includes(normalized);
+}
+
 export async function processLeadWorkflow(
   input: LeadProcessingInput
 ): Promise<LeadProcessingResult> {
@@ -98,11 +118,25 @@ export async function processLeadWorkflow(
     `============= PROCESSED LEAD ${JSON.stringify(details)} ==================`
   );
 
-  // Save lead to database
+  // Check for missing phone number and set processing error if needed
+  let processingError: string | undefined;
+  const hasValidPhone = !isMissingValue(details?.phone);
+  if (!hasValidPhone) {
+    processingError = 'Missing phone number';
+    log.warn('Lead is missing phone number', {
+      messageId: input.message.message_id,
+      from: input.message.from,
+      phoneValue: details?.phone,
+    });
+  }
+
+  // Save lead to database (don't save placeholder values like "N/A")
   const { leadId } = await saveLead({
     customerName: details?.email ? undefined : input.message.from, // Use from if no name extracted
-    customerNumber: details?.phone,
-    customerAddress: details?.address,
+    customerNumber: hasValidPhone ? details?.phone : undefined,
+    customerAddress: isMissingValue(details?.address)
+      ? undefined
+      : details?.address,
     provider: 'agentmail',
     providerLeadId: input.message.message_id,
     orgId: input.message.organization_id,
@@ -117,6 +151,7 @@ export async function processLeadWorkflow(
       serviceRequested: details?.serviceRequested,
     },
     chatChannel: 'email',
+    processingError,
   });
 
   log.info('Lead saved to database', { leadId });

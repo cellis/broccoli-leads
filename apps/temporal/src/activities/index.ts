@@ -210,6 +210,7 @@ export interface SaveLeadInput {
   status?: LeadStatus;
   leadRawData?: Record<string, unknown>;
   chatChannel?: ChatChannel;
+  processingError?: string;
 }
 
 export interface SaveLeadOutput {
@@ -240,8 +241,9 @@ export async function saveLead(input: SaveLeadInput): Promise<SaveLeadOutput> {
       org_id,
       status,
       lead_raw_data,
-      chat_channel
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      chat_channel,
+      processing_error
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     RETURNING id`,
     [
       input.customerName ?? null,
@@ -253,6 +255,7 @@ export async function saveLead(input: SaveLeadInput): Promise<SaveLeadOutput> {
       input.status ?? 'new',
       input.leadRawData ? JSON.stringify(input.leadRawData) : null,
       input.chatChannel ?? 'email',
+      input.processingError ?? null,
     ]
   );
 

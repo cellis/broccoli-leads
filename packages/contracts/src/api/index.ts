@@ -106,3 +106,64 @@ export type AgentMailEvent = z.infer<typeof AgentMailEventSchema>;
 export type ReceiveEmailRequest = z.infer<typeof ReceiveEmailRequestSchema>;
 export type ParsedEmail = z.infer<typeof ParsedEmailSchema>;
 export type TestRequest = z.infer<typeof TestRequestSchema>;
+
+// Lead status enum matching database
+export const LeadStatusSchema = z.enum([
+  'new',
+  'contacted',
+  'qualified',
+  'converted',
+  'lost',
+  'archived',
+]);
+
+export const ChatChannelSchema = z.enum([
+  'sms',
+  'email',
+  'whatsapp',
+  'phone',
+  'web',
+  'other',
+]);
+
+export const LeadSchema = z.object({
+  id: z.string().uuid(),
+  customer_name: z.string().nullable(),
+  customer_number: z.string().nullable(),
+  customer_address: z.string().nullable(),
+  provider: z.string(),
+  provider_lead_id: z.string().nullable(),
+  org_id: z.string().uuid(),
+  status: LeadStatusSchema,
+  lead_raw_data: z.record(z.unknown()).nullable(),
+  chat_channel: ChatChannelSchema.nullable(),
+  processing_error: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const ListLeadsQuerySchema = z.object({
+  status: LeadStatusSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  offset: z.coerce.number().int().min(0).optional().default(0),
+});
+
+export const ListLeadsResponseSchema = z.object({
+  leads: z.array(LeadSchema),
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
+});
+
+export const UpdateLeadStatusRequestSchema = z.object({
+  status: LeadStatusSchema,
+});
+
+export type LeadStatus = z.infer<typeof LeadStatusSchema>;
+export type ChatChannel = z.infer<typeof ChatChannelSchema>;
+export type Lead = z.infer<typeof LeadSchema>;
+export type ListLeadsQuery = z.infer<typeof ListLeadsQuerySchema>;
+export type ListLeadsResponse = z.infer<typeof ListLeadsResponseSchema>;
+export type UpdateLeadStatusRequest = z.infer<
+  typeof UpdateLeadStatusRequestSchema
+>;

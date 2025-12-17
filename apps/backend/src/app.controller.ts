@@ -1,6 +1,17 @@
-import { Controller, Get, Post, Body, Query, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Query,
+  Param,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { AppService } from './app.service';
 import { TemporalService } from './temporal.service';
+import { LeadsService } from './leads.service';
 import { UseZodValidation } from './common/decorators/zod-validation.decorator';
 import {
   CreateClientRequestSchema,
@@ -11,12 +22,19 @@ import {
   type TestRequest,
   type LeadProcessingInput,
   type AgentMailEvent,
+  ListLeadsQuerySchema,
+  type ListLeadsQuery,
+  type ListLeadsResponse,
+  UpdateLeadStatusRequestSchema,
+  type UpdateLeadStatusRequest,
+  type Lead,
 } from '@broccoli/contracts';
 
 // leave this here to help the IDE understand the type of AppService
 // nestjs reflection will not work without this
 AppService;
 TemporalService;
+LeadsService;
 
 @Controller()
 export class AppController {
@@ -24,7 +42,8 @@ export class AppController {
 
   constructor(
     private readonly appService: AppService,
-    private readonly temporalService: TemporalService
+    private readonly temporalService: TemporalService,
+    private readonly leadsService: LeadsService
   ) {}
 
   @Get()
@@ -141,5 +160,56 @@ export class AppController {
       message: 'AgentMail payload received',
       workflowId: workflowHandle.workflowId,
     };
+  }
+
+  // ============ LEADS API ============
+
+  @Get('leads')
+  @UseZodValidation(ListLeadsQuerySchema)
+  async listLeads(@Query() query: ListLeadsQuery): Promise<ListLeadsResponse> {
+    this.logger.log({ message: 'Listing leads', query });
+
+    const { leads, total } = await this.leadsService.listLeads(query);
+
+    return {
+      leads,
+      total,
+      limit: query.limit ?? 50,
+      offset: query.offset ?? 0,
+    };
+  }
+
+  @Get('leads/:id')
+  async getLeadById(@Param('id') id: string): Promise<Lead> {
+    this.logger.log({ message: 'Getting lead by ID', id });
+
+    const lead = await this.leadsService.getLeadById(id);
+
+    if (!lead) {
+      throw new NotFoundException(`Lead with ID ${id} not found`);
+    }
+
+    return lead;
+  }
+
+  @Patch('leads/:id/status')
+  @UseZodValidation(UpdateLeadStatusRequestSchema)
+  async updateLeadStatus(
+    @Param('id') id: string,
+    @Body() body: UpdateLeadStatusRequest
+  ): Promise<Lead> {
+    this.logger.log({
+      message: 'Updating lead status',
+      id,
+      status: body.status,
+    });
+
+    const lead = await this.leadsService.updateLeadStatus(id, body.status);
+
+    if (!lead) {
+      throw new NotFoundException(`Lead with ID ${id} not found`);
+    }
+
+    return lead;
   }
 }
